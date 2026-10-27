@@ -217,13 +217,32 @@ class CinemanaLocalServer(context: Context) : NanoHTTPD("127.0.0.1", PORT) {
     }
 
     private fun extractItems(data: JsonElement): List<JsonObject> {
-        if (data.isJsonArray) return data.asJsonArray.mapNotNull { it.takeIf(JsonElement::isJsonObject)?.asJsonObject }
+        if (data.isJsonArray) {
+            return data.asJsonArray.mapNotNull { it.takeIf(JsonElement::isJsonObject)?.asJsonObject }
+        }
         if (!data.isJsonObject) return emptyList()
         val obj = data.asJsonObject
-        listOf("info", "results", "videos", "data", "items").forEach { key ->
-            val value = obj.get(key)
-            if (value != null && value.isJsonArray) return value.asJsonArray.mapNotNull { it.takeIf(JsonElement::isJsonObject)?.asJsonObject }
+
+        // Cinemana endpoints do not use one consistent response shape:
+        // some return an array directly, others wrap it in info/results/data,
+        // and detail endpoints may return a single object under info.
+        listOf("info", "results", "videos", "data", "items", "files").forEach { key ->
+            val value = obj.get(key) ?: return@forEach
+            if (value.isJsonArray) {
+                return value.asJsonArray.mapNotNull { it.takeIf(JsonElement::isJsonObject)?.asJsonObject }
+            }
+            if (value.isJsonObject) {
+                val nested = extractItems(value)
+                if (nested.isNotEmpty()) return nested
+                // allVideoInfo may wrap one movie/episode object in "info".
+                if (key == "info" && (value.asJsonObject.has("nb") || value.asJsonObject.has("id"))) {
+                    return listOf(value.asJsonObject)
+                }
+            }
         }
+
+        // Some API versions return a single record directly.
+        if (obj.has("nb") || obj.has("id")) return listOf(obj)
         return emptyList()
     }
 
