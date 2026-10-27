@@ -17,6 +17,7 @@ import javax.inject.Inject
 import javax.inject.Singleton
 
 private const val TAG = "AddonSyncService"
+private const val LOCAL_CINEMANA_URL = "http://127.0.0.1:7000"
 
 @Singleton
 class AddonSyncService @Inject constructor(
@@ -50,7 +51,9 @@ class AddonSyncService @Inject constructor(
                 return@withContext Result.success(Unit)
             }
 
+            // Device-local addon endpoints must never be written to Supabase.
             val localUrls = addonPreferences.installedAddonUrls.first()
+                .filterNot { canonicalizeUrl(it).equals(LOCAL_CINEMANA_URL, ignoreCase = true) }
             val userSetNames = addonPreferences.userSetNames.first()
             val enabledStates = addonPreferences.addonEnabledStates.first()
             Log.d(TAG, "pushToRemote: localUrls count=${localUrls.size} for profile $profileId")
@@ -124,6 +127,8 @@ class AddonSyncService @Inject constructor(
                 remoteAddons
                 .sortedBy { it.sortOrder }
                 .map { it.url }
+                .filterNot { canonicalizeUrl(it).equals(LOCAL_CINEMANA_URL, ignoreCase = true) }
+                .plus(LOCAL_CINEMANA_URL)
             )
         } catch (e: Exception) {
             Log.e(TAG, "Failed to get remote addon URLs", e)

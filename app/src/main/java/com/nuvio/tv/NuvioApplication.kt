@@ -26,11 +26,19 @@ import com.nuvio.tv.core.sync.StartupSyncService
 import com.nuvio.tv.core.sync.androidtv.AndroidTvChannelSyncService
 import com.nuvio.tv.core.network.IPv4FirstDns
 import com.nuvio.tv.core.network.NoDelaySocketFactory
+import com.nuvio.tv.core.cinemana.CinemanaLocalServer
+import com.nuvio.tv.data.local.AddonPreferences
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.flow.first
 import com.nuvio.tv.data.local.ImagePerformancePreferences
 import com.nuvio.tv.data.local.SentrySettingsDataStore
 import com.nuvio.tv.data.mediaserver.ServerUserStateProjection
 import com.nuvio.tv.data.simkl.SimklAnimeIdPreferenceHolder
 import dagger.hilt.android.HiltAndroidApp
+import fi.iki.elonen.NanoHTTPD
 import okhttp3.Cookie
 import okhttp3.CookieJar
 import okhttp3.HttpUrl
@@ -48,6 +56,10 @@ class NuvioApplication : Application(), SingletonImageLoader.Factory {
     @Inject lateinit var imagePerformancePreferences: ImagePerformancePreferences
     @Inject lateinit var simklAnimeIdPreferenceHolder: SimklAnimeIdPreferenceHolder
     @Inject lateinit var serverUserStateProjection: ServerUserStateProjection
+    @Inject lateinit var addonPreferences: AddonPreferences
+
+    private val cinemanaScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+    private var cinemanaLocalServer: CinemanaLocalServer? = null
 
     companion object {
         /**
@@ -85,11 +97,52 @@ class NuvioApplication : Application(), SingletonImageLoader.Factory {
         PluginRuntimeHooks.onApplicationCreate(this)
         androidTvChannelSyncService.start()
         serverUserStateProjection.start()
+        startCinemanaIntegration()
         // Load locale synchronously so it's available before Activity.attachBaseContext.
         // SharedPreferences reads are fast (cached in memory after first access).
         val tag = getSharedPreferences("app_locale", Context.MODE_PRIVATE)
             .getString("locale_tag", null)
         LocaleCache.localeTag = tag ?: ""
+    }
+
+    private fun startCinemanaIntegration() {
+        cinemanaScope.launch {
+            try {
+                val server = CinemanaLocalServer(this@NuvioApplication)
+                server.start(NanoHTTPD.SOCKET_READ_TIMEOUT, false)
+                cinemanaLocalServer = server
+                android.util.Log.i("NuvioApplication", "Native Cinemana bridge started at http://127.0.0.1:7000")
+
+                // Addon preferences can reject writes while a secondary profile is being
+                // initialized. A one-shot addAddon() silently loses Cinemana for that launch.
+                // Retry until the URL is present in the effective profile's addon list.
+                val localUrl = "http://127.0.0.1:7000"
+                while (true) {
+                    try {
+                        addonPreferences.ensureMigrated()
+                        val alreadyPresent = addonPreferences.installedAddonUrls.first()
+                            .any { it.trimEnd('/').equals(localUrl, ignoreCase = true) }
+                        if (alreadyPresent) {
+                            android.util.Log.i("NuvioApplication", "Cinemana addon already installed")
+                            break
+                        }
+                        val added = addonPreferences.addAddon(localUrl)
+                        val visible = addonPreferences.installedAddonUrls.first()
+                            .any { it.trimEnd('/').equals(localUrl, ignoreCase = true) }
+                        if (added || visible) {
+                            android.util.Log.i("NuvioApplication", "Cinemana addon registered")
+                            break
+                        }
+                        android.util.Log.w("NuvioApplication", "Cinemana addon registration deferred; retrying")
+                    } catch (e: Exception) {
+                        android.util.Log.w("NuvioApplication", "Cinemana addon registration attempt failed", e)
+                    }
+                    kotlinx.coroutines.delay(2_000)
+                }
+            } catch (e: Exception) {
+                android.util.Log.e("NuvioApplication", "Unable to start native Cinemana integration", e)
+            }
+        }
     }
 
     override fun newImageLoader(context: android.content.Context): ImageLoader {
