@@ -9,7 +9,6 @@ import com.google.gson.JsonObject
 import fi.iki.elonen.NanoHTTPD
 import okhttp3.OkHttpClient
 import okhttp3.Request
-import java.net.URLDecoder
 import java.net.URLEncoder
 import java.nio.charset.StandardCharsets
 import java.util.concurrent.TimeUnit
@@ -19,7 +18,7 @@ import java.util.concurrent.TimeUnit
  * its URL must never be persisted in AddonPreferences or sent to addon sync.
  */
 class CinemanaLocalServer(context: Context) : NanoHTTPD("127.0.0.1", PORT) {
-    private val appContext = context.applicationContext
+    @Suppress("unused") private val applicationContext = context.applicationContext
     private val gson = Gson()
     private val client = OkHttpClient.Builder()
         .connectTimeout(12, TimeUnit.SECONDS)
@@ -104,7 +103,7 @@ class CinemanaLocalServer(context: Context) : NanoHTTPD("127.0.0.1", PORT) {
     }
 
     private fun meta(path: String): JsonObject {
-        val id = path.removePrefix("/meta/").substringAfter('/', "").substringBefore('/')
+        val id = path.removePrefix("/meta/").substringAfter('/', "").substringBefore('/').removeSuffix(".json")
         val isSeries = id.startsWith("cinemana-series:")
         val rawId = digits(id.removePrefix("cinemana-series:").removePrefix("cinemana:"))
         if (rawId.isBlank()) return JsonObject().apply { add("meta", null) }
@@ -134,7 +133,7 @@ class CinemanaLocalServer(context: Context) : NanoHTTPD("127.0.0.1", PORT) {
     }
 
     private fun streams(path: String): JsonObject {
-        val id = path.removePrefix("/stream/").substringAfter('/', "").substringBefore('/')
+        val id = path.removePrefix("/stream/").substringAfter('/', "").substringBefore('/').removeSuffix(".json")
         val rawId = digits(id.removePrefix("cinemana-series:").removePrefix("cinemana:"))
         val array = JsonArray()
         if (rawId.isNotBlank()) {
