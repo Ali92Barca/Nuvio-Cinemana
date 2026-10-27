@@ -96,8 +96,9 @@ class AddonPreferences @Inject constructor(
     }
 
     suspend fun addAddon(url: String): Boolean {
-           val active = profileManager.activeProfile
-           if (active != null && !active.isPrimary && active.usesPrimaryAddons) return false
+        // installedAddonUrls already resolves shared-addon profiles to profile 1.
+        // Do not reject additions from those profiles: addAddon() writes to the
+        // effective (primary) addon store, which is exactly where shared addons belong.
         var changed = false
         store().edit { preferences ->
             val current = getCurrentList(preferences)
