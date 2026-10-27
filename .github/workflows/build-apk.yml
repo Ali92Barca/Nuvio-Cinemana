@@ -1,13 +1,11 @@
-```yaml
 name: Build Nuvio APK
 
-on:
+'on':
   workflow_dispatch:
 
 jobs:
   build:
     runs-on: ubuntu-latest
-
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -38,4 +36,3 @@ jobs:
           name: Nuvio-Cinemana-APK
           path: app/build/outputs/apk/full/debug/*.apk
           if-no-files-found: error
-```
