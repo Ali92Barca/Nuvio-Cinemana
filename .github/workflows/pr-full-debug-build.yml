@@ -33,6 +33,9 @@ jobs:
         env:
           LOCAL_PROPERTIES_BASE64: ${{ secrets.LOCAL_PROPERTIES_BASE64 }}
           LOCAL_DEV_PROPERTIES_BASE64: ${{ secrets.LOCAL_DEV_PROPERTIES_BASE64 }}
+          NUVIO_SUPABASE_URL: ${{ secrets.NUVIO_SUPABASE_URL }}
+          NUVIO_SUPABASE_ANON_KEY: ${{ secrets.NUVIO_SUPABASE_ANON_KEY }}
+          NUVIO_SUPABASE_FALLBACK_URL: ${{ secrets.NUVIO_SUPABASE_FALLBACK_URL }}
         run: |
           if [ -n "$LOCAL_PROPERTIES_BASE64" ]; then
             printf '%s' "$LOCAL_PROPERTIES_BASE64" | base64 --decode > local.properties
@@ -45,6 +48,19 @@ jobs:
           else
             touch local.dev.properties
           fi
+
+          if [ -z "$NUVIO_SUPABASE_URL" ] || [ -z "$NUVIO_SUPABASE_ANON_KEY" ]; then
+            echo "::error::Missing NUVIO_SUPABASE_URL or NUVIO_SUPABASE_ANON_KEY repository secret. Refusing to build an APK with broken account/QR configuration."
+            exit 1
+          fi
+
+          for properties_file in local.properties local.dev.properties; do
+            {
+              echo "NUVIO_SUPABASE_URL=$NUVIO_SUPABASE_URL"
+              echo "NUVIO_SUPABASE_ANON_KEY=$NUVIO_SUPABASE_ANON_KEY"
+              echo "NUVIO_SUPABASE_FALLBACK_URL=$NUVIO_SUPABASE_FALLBACK_URL"
+            } >> "$properties_file"
+          done
 
       - name: Prepare CI signing config
         run: |
