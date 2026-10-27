@@ -17,12 +17,28 @@ jobs:
           java-version: '17'
           cache: gradle
 
-      - name: Create local.properties
+      - name: Create local properties
         env:
           TMDB_API_KEY: ${{ secrets.TMDB_API_KEY }}
+          NUVIO_SUPABASE_URL: ${{ secrets.NUVIO_SUPABASE_URL }}
+          NUVIO_SUPABASE_ANON_KEY: ${{ secrets.NUVIO_SUPABASE_ANON_KEY }}
+          NUVIO_SUPABASE_FALLBACK_URL: ${{ secrets.NUVIO_SUPABASE_FALLBACK_URL }}
         run: |
-          touch local.properties
-          echo "TMDB_API_KEY=$TMDB_API_KEY" >> local.properties
+          if [ -z "$NUVIO_SUPABASE_URL" ] || [ -z "$NUVIO_SUPABASE_ANON_KEY" ]; then
+            echo "::error::Missing NUVIO_SUPABASE_URL or NUVIO_SUPABASE_ANON_KEY repository secret. Refusing to build an APK with broken account/QR configuration."
+            exit 1
+          fi
+          {
+            echo "TMDB_API_KEY=$TMDB_API_KEY"
+            echo "NUVIO_SUPABASE_URL=$NUVIO_SUPABASE_URL"
+            echo "NUVIO_SUPABASE_ANON_KEY=$NUVIO_SUPABASE_ANON_KEY"
+            echo "NUVIO_SUPABASE_FALLBACK_URL=$NUVIO_SUPABASE_FALLBACK_URL"
+          } > local.properties
+          {
+            echo "NUVIO_SUPABASE_URL=$NUVIO_SUPABASE_URL"
+            echo "NUVIO_SUPABASE_ANON_KEY=$NUVIO_SUPABASE_ANON_KEY"
+            echo "NUVIO_SUPABASE_FALLBACK_URL=$NUVIO_SUPABASE_FALLBACK_URL"
+          } > local.dev.properties
 
       - name: Grant execute permission
         run: chmod +x ./gradlew
