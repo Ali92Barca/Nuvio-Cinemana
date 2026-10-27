@@ -223,7 +223,7 @@ android {
 
     buildTypes {
         debug {
-            signingConfig = signingConfigs.getByName("release")
+            signingConfig = signingConfigs.getByName("debug")
             isDebuggable = parseBooleanProperty(providers.gradleProperty("debuggable").orNull)
             isMinifyEnabled = false
 
