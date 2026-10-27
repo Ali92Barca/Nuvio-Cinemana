@@ -110,9 +110,34 @@ class NuvioApplication : Application(), SingletonImageLoader.Factory {
                 val server = CinemanaLocalServer(this@NuvioApplication)
                 server.start(NanoHTTPD.SOCKET_READ_TIMEOUT, false)
                 cinemanaLocalServer = server
-                // This URL is device-local by design. Every app installation starts its own
-                // bridge before loading installed addons, so syncing the URL remains portable.
-                addonPreferences.addAddon("http://127.0.0.1:7000")
+                android.util.Log.i("NuvioApplication", "Native Cinemana bridge started at http://127.0.0.1:7000")
+
+                // Addon preferences can reject writes while a secondary profile is being
+                // initialized. A one-shot addAddon() silently loses Cinemana for that launch.
+                // Retry until the URL is present in the effective profile's addon list.
+                val localUrl = "http://127.0.0.1:7000"
+                while (true) {
+                    try {
+                        addonPreferences.ensureMigrated()
+                        val alreadyPresent = addonPreferences.installedAddonUrls.first()
+                            .any { it.trimEnd('/').equals(localUrl, ignoreCase = true) }
+                        if (alreadyPresent) {
+                            android.util.Log.i("NuvioApplication", "Cinemana addon already installed")
+                            break
+                        }
+                        val added = addonPreferences.addAddon(localUrl)
+                        val visible = addonPreferences.installedAddonUrls.first()
+                            .any { it.trimEnd('/').equals(localUrl, ignoreCase = true) }
+                        if (added || visible) {
+                            android.util.Log.i("NuvioApplication", "Cinemana addon registered")
+                            break
+                        }
+                        android.util.Log.w("NuvioApplication", "Cinemana addon registration deferred; retrying")
+                    } catch (e: Exception) {
+                        android.util.Log.w("NuvioApplication", "Cinemana addon registration attempt failed", e)
+                    }
+                    kotlinx.coroutines.delay(2_000)
+                }
             } catch (e: Exception) {
                 android.util.Log.e("NuvioApplication", "Unable to start native Cinemana integration", e)
             }
