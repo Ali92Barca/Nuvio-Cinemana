@@ -80,7 +80,7 @@ class CinemanaLocalServer(context: Context) : NanoHTTPD("127.0.0.1", PORT) {
         val parts = path.removePrefix("/catalog/").split('/')
         if (parts.size < 2) return JsonObject().apply { add("metas", JsonArray()) }
         val type = parts[0]
-        val catalogId = parts[1]
+        val catalogId = parts[1].removeSuffix(".json")
         val skip = query["skip"]?.toIntOrNull()?.coerceAtLeast(0) ?: 0
         val search = query["search"].orEmpty().trim()
         val items = when {
